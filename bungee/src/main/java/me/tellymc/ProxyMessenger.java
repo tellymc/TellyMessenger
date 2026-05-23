@@ -1,37 +1,34 @@
+package me.tellymc;
+
 import com.google.common.io.ByteArrayDataInput;
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
-import org.bukkit.entity.Player;
-import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.plugin.messaging.PluginMessageListener;
-import org.checkerframework.checker.nullness.qual.NonNull;
+import net.md_5.bungee.api.ProxyServer;
+import net.md_5.bungee.api.connection.ProxiedPlayer;
+import net.md_5.bungee.api.connection.Server;
+import net.md_5.bungee.api.event.PluginMessageEvent;
+import net.md_5.bungee.api.plugin.Listener;
+import net.md_5.bungee.api.plugin.Plugin;
+import net.md_5.bungee.event.EventHandler;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
-public class BackendMessenger extends Messenger implements PluginMessageListener {
+public class ProxyMessenger extends Messenger implements Listener {
 
-    private final JavaPlugin plugin;
+    private final Plugin plugin;
     private final Map<String, Map<String, PacketListener>> listeners = new ConcurrentHashMap<>();
 
-    public BackendMessenger(JavaPlugin plugin) {
+    public ProxyMessenger(Plugin plugin) {
         this.plugin = plugin;
+
+        ProxyServer.getInstance().getPluginManager().registerListener(plugin, this);
     }
 
     @Override
     public void register(String channel) {
-
-        plugin.getServer().getMessenger().registerIncomingPluginChannel(
-                plugin,
-                channel,
-                this
-        );
-
-        plugin.getServer().getMessenger().registerOutgoingPluginChannel(
-                plugin,
-                channel
-        );
+        ProxyServer.getInstance().registerChannel(channel);
     }
 
     @Override
@@ -41,11 +38,17 @@ public class BackendMessenger extends Messenger implements PluginMessageListener
             return;
         }
 
-        if (!(target instanceof Player)) {
+        if (!(target instanceof ProxiedPlayer)) {
             return;
         }
 
-        Player player = (Player) target;
+        ProxiedPlayer player = (ProxiedPlayer) target;
+        Server server = player.getServer();
+
+        if (server == null) {
+            return;
+        }
+
         ByteArrayDataOutput out = ByteStreams.newDataOutput();
 
         out.writeUTF(subChannel);
@@ -53,11 +56,11 @@ public class BackendMessenger extends Messenger implements PluginMessageListener
         try {
             writer.write(out);
         } catch (Exception e) {
-            plugin.getLogger().log(Level.SEVERE, "Failed while sending packet out.", e);
+            plugin.getLogger().log(Level.SEVERE, "Failed sending message out.", e);
             return;
         }
 
-        player.sendPluginMessage(plugin, channel, out.toByteArray());
+        server.sendData(channel, out.toByteArray());
     }
 
     @Override
@@ -66,15 +69,18 @@ public class BackendMessenger extends Messenger implements PluginMessageListener
         listeners.computeIfAbsent(channel, c -> new ConcurrentHashMap<>()).put(subChannel, listener);
     }
 
-    @Override
-    public void onPluginMessageReceived(@NonNull String channel, @NonNull Player player, byte @NonNull [] message) {
+    @EventHandler
+    public void onMessageReceive(PluginMessageEvent event) {
 
-        ByteArrayDataInput in = ByteStreams.newDataInput(message);
+        String channel = event.getTag();
+        ByteArrayDataInput in = ByteStreams.newDataInput(event.getData());
         String subChannel = in.readUTF();
 
         Map<String, PacketListener> subs = listeners.get(channel);
 
-        if (subs == null) return;
+        if (subs == null) {
+            return;
+        }
 
         PacketListener listener = subs.get(subChannel);
 
@@ -85,7 +91,7 @@ public class BackendMessenger extends Messenger implements PluginMessageListener
         try {
             listener.read(in);
         } catch (Exception e) {
-            plugin.getLogger().log(Level.SEVERE, "Failed while receiving a packet in.", e);
+            plugin.getLogger().log(Level.SEVERE, "Failed while receiving message in.", e);
         }
     }
 }

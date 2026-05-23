@@ -1,3 +1,5 @@
+package me.tellymc;
+
 import net.md_5.bungee.api.plugin.Plugin;
 
 public final class TellyMessenger {

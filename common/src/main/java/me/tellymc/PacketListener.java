@@ -1,3 +1,5 @@
+package me.tellymc;
+
 import com.google.common.io.ByteArrayDataInput;
 
 @FunctionalInterface

@@ -1,32 +1,39 @@
+package me.tellymc;
+
 import com.google.common.io.ByteArrayDataInput;
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
-import net.md_5.bungee.api.ProxyServer;
-import net.md_5.bungee.api.connection.ProxiedPlayer;
-import net.md_5.bungee.api.connection.Server;
-import net.md_5.bungee.api.event.PluginMessageEvent;
-import net.md_5.bungee.api.plugin.Listener;
-import net.md_5.bungee.api.plugin.Plugin;
-import net.md_5.bungee.event.EventHandler;
+import org.bukkit.entity.Player;
+import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.plugin.messaging.PluginMessageListener;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
-public class ProxyMessenger extends Messenger implements Listener {
+public class BackendMessenger extends Messenger implements PluginMessageListener {
 
-    private final Plugin plugin;
+    private final JavaPlugin plugin;
     private final Map<String, Map<String, PacketListener>> listeners = new ConcurrentHashMap<>();
 
-    public ProxyMessenger(Plugin plugin) {
+    public BackendMessenger(JavaPlugin plugin) {
         this.plugin = plugin;
-
-        ProxyServer.getInstance().getPluginManager().registerListener(plugin, this);
     }
 
     @Override
     public void register(String channel) {
-        ProxyServer.getInstance().registerChannel(channel);
+
+        plugin.getServer().getMessenger().registerIncomingPluginChannel(
+                plugin,
+                channel,
+                this
+        );
+
+        plugin.getServer().getMessenger().registerOutgoingPluginChannel(
+                plugin,
+                channel
+        );
     }
 
     @Override
@@ -36,17 +43,11 @@ public class ProxyMessenger extends Messenger implements Listener {
             return;
         }
 
-        if (!(target instanceof ProxiedPlayer)) {
+        if (!(target instanceof Player)) {
             return;
         }
 
-        ProxiedPlayer player = (ProxiedPlayer) target;
-        Server server = player.getServer();
-
-        if (server == null) {
-            return;
-        }
-
+        Player player = (Player) target;
         ByteArrayDataOutput out = ByteStreams.newDataOutput();
 
         out.writeUTF(subChannel);
@@ -54,11 +55,11 @@ public class ProxyMessenger extends Messenger implements Listener {
         try {
             writer.write(out);
         } catch (Exception e) {
-            plugin.getLogger().log(Level.SEVERE, "Failed sending message out.", e);
+            plugin.getLogger().log(Level.SEVERE, "Failed while sending packet out.", e);
             return;
         }
 
-        server.sendData(channel, out.toByteArray());
+        player.sendPluginMessage(plugin, channel, out.toByteArray());
     }
 
     @Override
@@ -67,18 +68,15 @@ public class ProxyMessenger extends Messenger implements Listener {
         listeners.computeIfAbsent(channel, c -> new ConcurrentHashMap<>()).put(subChannel, listener);
     }
 
-    @EventHandler
-    public void onMessageReceive(PluginMessageEvent event) {
+    @Override
+    public void onPluginMessageReceived(@NonNull String channel, @NonNull Player player, byte @NonNull [] message) {
 
-        String channel = event.getTag();
-        ByteArrayDataInput in = ByteStreams.newDataInput(event.getData());
+        ByteArrayDataInput in = ByteStreams.newDataInput(message);
         String subChannel = in.readUTF();
 
         Map<String, PacketListener> subs = listeners.get(channel);
 
-        if (subs == null) {
-            return;
-        }
+        if (subs == null) return;
 
         PacketListener listener = subs.get(subChannel);
 
@@ -89,7 +87,7 @@ public class ProxyMessenger extends Messenger implements Listener {
         try {
             listener.read(in);
         } catch (Exception e) {
-            plugin.getLogger().log(Level.SEVERE, "Failed while receiving message in.", e);
+            plugin.getLogger().log(Level.SEVERE, "Failed while receiving a packet in.", e);
         }
     }
 }
