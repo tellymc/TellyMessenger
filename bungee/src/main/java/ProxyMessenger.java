@@ -1,11 +1,6 @@
-package me.tellymc.tellyMessenger.messengers;
-
 import com.google.common.io.ByteArrayDataInput;
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
-import me.tellymc.tellyMessenger.Messenger;
-import me.tellymc.tellyMessenger.objects.PacketListener;
-import me.tellymc.tellyMessenger.objects.PacketWriter;
 import net.md_5.bungee.api.ProxyServer;
 import net.md_5.bungee.api.connection.ProxiedPlayer;
 import net.md_5.bungee.api.connection.Server;

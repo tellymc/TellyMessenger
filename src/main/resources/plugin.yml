@@ -1,5 +1,0 @@
-name: TellyMessenger
-version: '${version}'
-
-main: me.tellymc.tellyMessenger.TellyMessenger
-api-version: '1.21'

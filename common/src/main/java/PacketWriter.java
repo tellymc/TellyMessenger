@@ -1,5 +1,3 @@
-package me.tellymc.tellyMessenger.objects;
-
 import com.google.common.io.ByteArrayDataOutput;
 
 @FunctionalInterface
